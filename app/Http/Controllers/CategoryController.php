@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Category;
 use App\Models\PopularItem;
 use App\Models\PortfolioItem;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class CategoryController extends Controller
 {
@@ -104,7 +105,7 @@ class CategoryController extends Controller
         }
 
         // Paginate results
-        $popularItems = $query->paginate(12);
+        $popularItems = $query->paginate(15);
 
         // Maintain filters on pagination links
         $popularItems->appends([
@@ -136,24 +137,98 @@ class CategoryController extends Controller
             });
         }
 
-        if ($request->filled(['start_date', 'end_date'])) {
-            $startDate = $request->input('start_date');
-            $endDate = $request->input('end_date');
-            $query->whereBetween('created_at', ["$startDate 00:00:00", "$endDate 23:59:59"]);
+        if ($request->filled('selected_date')) {
+            $query->whereDate('created_at', $request->input('selected_date'));
+        }
+        
+        $sortBy = $request->input('sort_by'); // Get sort option
+        if ($sortBy === 'sales') {
+            $query->orderBy('sales', 'desc'); // Sort by Sales
+        } elseif ($sortBy === 'ratings') {
+            $query->orderBy('ratings', 'desc'); // Sort by Ratings
+        } else {
+            $query->latest(); // Default sorting
         }
 
-        if ($request->filled('price')) {
-            $query->where('price', '<=', $request->input('price'));
-        }
 
-        if ($request->filled('ratings')) {
-            $query->where('ratings', '>=', $request->input('ratings'));
-        }
-
-        $popularItems = $query->paginate(12);
+        $latest = $query->latest()->first();
+        $popularItems = $query->paginate(30);
 
         $popularItems->appends($request->except('page'));
 
-        return view('portfolio_items.index', compact('popularItems', 'request'));
+        return view('portfolio_items.index', compact('popularItems', 'request', 'latest','author_name'));
+    }
+
+    public function showPopularReports(Request $request)
+    {
+        // Initialize query
+        $items = PopularItem::query();
+
+        // Category filter
+        $categoryId = $request->category ?? 1;
+        if (!empty($categoryId)) {
+            $items->where('category_id', $categoryId);
+        }
+
+        // Search filter
+        $searchTerm = $request->search;
+        if (!empty($searchTerm)) {
+            $items->where(function ($q) use ($searchTerm) {
+                $q->where('language_name', 'LIKE', "%{$searchTerm}%")
+                    ->orWhere('name', 'LIKE', "%{$searchTerm}%")
+                    ->orWhere('item_id', 'LIKE', "%{$searchTerm}%");
+            });
+        }
+
+        // Date range filter
+        $startDate = $request->start_date;
+        $endDate = $request->end_date;
+        if (!empty($startDate) && !empty($endDate)) {
+            $items->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+        }
+
+        // Get the data and group it by 'item_id'
+        $items = $items->orderBy('created_at', 'asc')->get()->groupBy('item_id');
+
+        // Process data to calculate total sales difference
+        $result = $items->map(function ($itemGroup) {
+            $first = $itemGroup->first(); // First record
+            $last = $itemGroup->last();   // Last record
+
+            return [
+                'item_id' => $first->item_id,
+                'name' => $first->name,
+                'total_sales_difference' => (
+                    (float) str_replace(',', '', $last->total_sales ?? 0) -
+                    (float) str_replace(',', '', $first->total_sales ?? 0)
+                ),
+                'first_total_sales' => $first->total_sales,
+                'last_total_sales' => $last->total_sales,
+                'price' => $last->price,
+                'image' => $last->image,
+                'author_name' => $last->author_name,
+                'published' => $last->published,
+                'trending' => $itemGroup->where('trending', 'Yes')->count(),
+            ];
+        });
+        // Sort by total_sales_difference (ascending or descending based on the user input)
+
+        $sortOrder = $request->sort_order ?? 'asc';
+
+        $result = $result->sortBy(function ($item) {
+            return $item['total_sales_difference']; // Sort by 'total_sales_difference' field
+        }, SORT_REGULAR, $sortOrder === 'desc')->values();
+
+        // Pagination logic for the result
+        $perPage = 20;
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
+        $currentResults = $result->slice(($currentPage - 1) * $perPage, $perPage);
+        $paginatedResults = new LengthAwarePaginator($currentResults, $result->count(), $perPage, $currentPage);
+
+        // Fetch categories
+        $categories = Category::all();
+
+        // Return view with required data
+        return view('popular_items.reports', compact('paginatedResults', 'searchTerm', 'categories', 'categoryId'));
     }
 }

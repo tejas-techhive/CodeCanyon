@@ -4,169 +4,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Items</title>
+    <title>Portfolio Page</title>
+    <link rel="stylesheet" href="{{ asset('asset/css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ asset('asset/css/flatpickr.min.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
 
-    <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+        .nav-tabs .nav-link {
+            color: #333;
+        }
 
-    <!-- Flatpickr CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+        .nav-tabs .nav-link.active {
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: bold;
+        }
+
+        .card-text {
+            font-size: 0.875rem;
+        }
+
+        footer p {
+            margin: 0;
+            font-size: 0.875rem;
+        }
+    </style>
 </head>
 
 <body>
-
-    <div class="container mt-5">
+    <section class="bg-light p-4 border-bottom">
         <a href="{{ url('/') }}" class="btn btn-secondary mb-3">Back</a>
-        <h1 class="text-center mb-4">Portfolio Items</h1>
-
-        <!-- Filters Form -->
-        <form action="{{ route('portfolio.items', $request->author_name) }}" method="GET" class="mb-4">
-            <div class="row">
-                <!-- Search Filter -->
-                <div class="col-md-3 mb-2">
-                    <input type="text" name="search" class="form-control" placeholder="Search by name or category"
-                        value="{{ request('search') }}">
-                </div>
-
-                <!-- Date Range Filter -->
-                <div class="col-md-2 mb-2">
-                    <input type="text" name="start_date" class="form-control datepicker" placeholder="Start Date"
-                        value="{{ request('start_date') }}">
-                </div>
-                <div class="col-md-2 mb-2">
-                    <input type="text" name="end_date" class="form-control datepicker" placeholder="End Date"
-                        value="{{ request('end_date') }}">
-                </div>
-
-                <!-- Price Filter -->
-                <div class="col-md-2 mb-2">
-                    <input type="number" name="price" class="form-control" placeholder="Max Price"
-                        value="{{ request('price') }}">
-                </div>
-
-                <!-- Ratings Filter -->
-                <div class="col-md-1 mb-2">
-                    <input type="number" name="ratings" class="form-control" placeholder="Min Rating"
-                        value="{{ request('ratings') }}" min="1" max="5">
-                </div>
-
-                <!-- Submit Button -->
-                <div class="col-md-2 mb-2">
-                    <button type="submit" class="btn btn-primary w-100">Search</button>
+        <div class="container d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center">
+                <img src="https://via.placeholder.com/80" alt="Logo" class="rounded-circle me-3">
+                <div>
+                    <h2 class="mb-0">{{ $latest->author_name ?? $author_name }} - Portfolio</h2>
                 </div>
             </div>
-        </form>
-
-        <!-- View Toggle Buttons -->
-        <div class="d-flex justify-content-end mb-3">
-            <button class="btn btn-outline-primary me-2 view-toggle" data-view="grid">Grid View</button>
-            <button class="btn btn-outline-primary view-toggle" data-view="table">Table View</button>
+            <div>
+                <h6>Author Rating</h6>
+                <p>@php
+                    $rating = $latest->rating ?? 0;
+                    $fullStars = floor($rating);
+                    $halfStars = $rating - $fullStars >= 0.5 ? 1 : 0;
+                    $emptyStars = 5 - ($fullStars + $halfStars);
+                @endphp
+                    <span>
+                        @for ($i = 0; $i < $fullStars; $i++)
+                            ⭐
+                        @endfor
+                        @for ($i = 0; $i < $halfStars; $i++)
+                            ⭐️
+                        @endfor
+                        @for ($i = 0; $i < $emptyStars; $i++)
+                            ☆
+                        @endfor
+                    </span> ({{ $latest->total_ratings ?? '' }} ratings)
+                </p>
+                <h6>Sales</h6>
+                <p><strong>{{ $latest->total_sales ?? '' }}</strong></p>
+            </div>
         </div>
+    </section>
 
-        <!-- Display Portfolio Items in Grid View -->
-        <div id="grid-view" class="row">
-            @foreach ($popularItems as $item)
-                <div class="col-md-4 mb-4">
-                    <div class="card h-100">
-                        <img src="{{ $item->image }}" class="card-img-top" alt="{{ $item->name }}">
-                        <div class="card-body">
-                            <h5 class="card-title">{{ $item->name }}</h5>
-                            <p class="card-text"><strong>Author:</strong> <a href="{{ route('portfolio.items', $item->author_name) }}">{{ $item->author_name }}</a></p>
-                            <p><strong>Category:</strong> {{ $item->category }}</p>
-                            <div class="row">
-                                <!-- Left Side -->
-                                <div class="col-md-6">
-                                    <p><strong>Price:</strong> ${{ $item->price }}</p>
-                                    <p><strong>Ratings:</strong> {{ $item->ratings }}</p>
-                                    <p><strong>Sales:</strong> {{ $item->sales }}</p>
+    <!-- Portfolio Section -->
+    <section class="py-4">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-12">
+                    <!-- Sorting Dropdown -->
+                    <div class="d-flex justify-content-between mb-3">
+                        <h5>Sales</h5>
+                        <div><label for="select_date">Select Date: </label><input type="text" name="select_date"
+                                id="select_date"></div>
+                        <select class="form-select w-auto" id="sort_by" onchange="sortItems()">
+                            <option value="">Sort By: Default</option>
+                            <option value="sales" {{ request('sort_by') == 'sales' ? 'selected' : '' }}>Sort By: Sales
+                            </option>
+                            <option value="ratings" {{ request('sort_by') == 'ratings' ? 'selected' : '' }}>Sort By:
+                                Ratings</option>
+                        </select>
+                    </div>
+
+                    <!-- Product Cards -->
+                    @foreach ($popularItems as $item)
+                        <div class="card mb-3 shadow-sm">
+                            <div class="row g-0">
+                                <div class="col-md-2 d-flex align-items-center justify-content-center">
+                                    <img src="{{ $item->image }}" class="img-fluid rounded-start"
+                                        alt="{{ $item->name }}">
                                 </div>
-                                
-                                <!-- Right Side -->
-                                <div class="col-md-6">
-                                    <p><strong>Rating:</strong> {{ $item->rating }} / 5</p>
-                                    <p><strong>Total Ratings:</strong> {{ $item->total_ratings }}</p>
-                                    <p><strong>Total Sales:</strong> {{ $item->total_sales }}</p>
+                                <div class="col-md-10">
+                                    <div class="card-body">
+                                        <h5 class="card-title">{{ $item->name }}</h5>
+                                        <p class="card-text"><small class="text-muted">Software Version:
+                                                {{ $item->category }}</small></p>
+                                        <div class="d-flex justify-content-between">
+                                            <span>${{ $item->price }}</span>
+                                            {{ $item->ratings }} ratings | {{ $item->sales }} Sales
+                                            </span>
+                                        </div>
+                                        <b>{{ $item->created_at->format('Y-m-d') }}</b>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            @endforeach
-        </div>
-
-        <!-- Display Portfolio Items in Table View -->
-        <div id="table-view" class="d-none">
-            <table class="table table-bordered">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Image</th>
-                        <th>Name</th>
-                        <th>Author</th>
-                        <th>Category</th>
-                        <th>Price</th>
-                        <th>Ratings</th>
-                        <th>Sales</th>
-                        <th>Rating</th>
-                        <th>Total Ratings</th>
-                        <th>Total Sales</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($popularItems as $key => $item)
-                        <tr>
-                            <td>{{ $key + 1 }}</td>
-                            <td><img src="{{ $item->image }}" width="50" alt="{{ $item->name }}"></td>
-                            <td>{{ $item->name }}</td>
-                            <td>{{ $item->author_name }}</td>
-                            <td>{{ $item->category }}</td>
-                            <td>${{ $item->price }}</td>
-                            <td>{{ $item->rating }} / 5</td>
-                            <td>{{ $item->sales }}</td>
-                            <td>{{ $item->ratings }}</td>
-                            <td>{{ $item->total_ratings }}</td>
-                            <td>{{ $item->total_sales }}</td>
-                        </tr>
                     @endforeach
-                </tbody>
-            </table>
+
+                    <!-- Pagination -->
+                    {{ $popularItems->links('pagination::bootstrap-5') }}
+                </div>
+            </div>
         </div>
+    </section>
 
-        <!-- Pagination Links -->
-        <div class="d-flex justify-content-center mt-4">
-            {{ $popularItems->links('pagination::bootstrap-5') }}
-        </div>
-    </div>
-
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- Flatpickr JS -->
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-
-    <script>
-        // Flatpickr Date Initialization
-        flatpickr('input[name="start_date"], input[name="end_date"]', {
-            enableTime: false,
-            dateFormat: 'Y-m-d'
-        });
-
-        // View Toggle Logic
-        document.querySelectorAll('.view-toggle').forEach(button => {
-            button.addEventListener('click', function() {
-                const view = this.dataset.view;
-
-                if (view === 'grid') {
-                    document.getElementById('grid-view').classList.remove('d-none');
-                    document.getElementById('table-view').classList.add('d-none');
-                } else if (view === 'table') {
-                    document.getElementById('table-view').classList.remove('d-none');
-                    document.getElementById('grid-view').classList.add('d-none');
-                }
-            });
-        });
-    </script>
-
+    <!-- Footer -->
+    <footer class="bg-light text-center p-3 mt-4">
+        <p>&copy; 2025. | All Rights Reserved.</p>
+    </footer>
+    <script src="{{ asset('asset/js/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ asset('asset/js/flatpickr.js') }}"></script>
 </body>
+<script>
+    function sortItems() {
+        let sortBy = document.getElementById('sort_by').value;
+        let url = new URL(window.location.href);
 
+        // Update query string
+        if (sortBy) {
+            url.searchParams.set('sort_by', sortBy);
+        } else {
+            url.searchParams.delete('sort_by');
+        }
+
+        window.location.href = url.toString();
+    }
+
+    flatpickr('#select_date', {
+        enableTime: false,
+        dateFormat: 'Y-m-d',
+        defaultDate: "{{ request('selected_date') }}",
+        onChange: function(selectedDates, dateStr, instance) {
+            let url = new URL(window.location.href);
+            url.searchParams.set('selected_date', dateStr);
+            window.location.href = url.toString();
+        }
+    });
+</script>
 </html>

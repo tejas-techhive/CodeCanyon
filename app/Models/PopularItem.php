@@ -43,4 +43,10 @@ class PopularItem extends Model
     {
         return Carbon::parse($this->last_update)->format('Y-m-d h:i:s A');
     }
+
+    public function getPublishedAttribute($value)
+    {
+        // Format the date to 'Y-m-d' (2021-04-06)
+        return Carbon::parse($value)->format('Y-m-d');
+    }
 }

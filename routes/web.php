@@ -23,9 +23,10 @@ Route::get('/', function () {
 Route::resource('categories', CategoryController::class);
 Route::get('popular-items', [CategoryController::class, 'showPopularItems'])->name('popular.items');
 Route::get('portfolio-items/{author_name?}', [CategoryController::class, 'showPortfolioItems'])->name('portfolio.items');
-Route::get('/clear-cache', function() {
+Route::get('popular-items/reports', [CategoryController::class, 'showPopularReports'])->name('popular.items.reports');
 
-     Artisan::call('config:cache');
-     Artisan::call('cache:clear');
+Route::get('/clear-cache', function () {
+    Artisan::call('config:cache');
+    Artisan::call('cache:clear');
     return "Success";
 });

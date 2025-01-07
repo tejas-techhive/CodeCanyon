@@ -42,7 +42,7 @@ class FetchPortfolioData extends Command
     {
         $authors = Author::select('id', 'name')
             ->where('is_complete', 0)
-            ->take(10)
+            ->take(6)
             ->get();
 
         if ($authors->isEmpty()) {

@@ -26,7 +26,7 @@
                 <!-- Category Filter -->
                 <div class="col-md-3">
                     <select name="category" class="form-select">
-                        <option value="">Select Category</option>
+                        <option value="">All</option>
                         @foreach ($categories as $category)
                             <option value="{{ $category->id }}" {{ $categoryId == $category->id ? 'selected' : '' }}>
                                 {{ ucfirst($category->slug) }}</option>
@@ -40,22 +40,36 @@
                         value="{{ $searchTerm }}" id="category-filter">
                 </div>
 
-                <!-- Date Range Filter -->
                 <div class="col-md-2">
-                    <input type="text" name="start_date" class="form-control datepicker" placeholder="Start Date"
-                        value="{{ request('start_date') }}">
+                    <div class="input-group">
+                        <input type="text" name="start_date" class="form-control datepicker" placeholder="Start Date"
+                            value="{{ request('start_date') }}">
+                        <button type="button" id="clear-start-date"
+                            class="btn btn-sm btn-outline-secondary">Clear</button>
+                    </div>
                 </div>
                 <div class="col-md-2">
-                    <input type="text" name="end_date" class="form-control datepicker" placeholder="End Date"
-                        value="{{ request('end_date') }}">
+                    <div class="input-group">
+                        <input type="text" name="end_date" class="form-control datepicker" placeholder="End Date"
+                            value="{{ request('end_date') }}">
+                        <button type="button" id="clear-end-date"
+                            class="btn btn-sm btn-outline-secondary">Clear</button>
+                    </div>
                 </div>
 
-                <!-- Submit Button -->
                 <div class="col-md-2">
                     <button type="submit" class="btn btn-primary w-100" id="search-button">Search</button>
                 </div>
             </div>
         </form>
+        <div class="col-md-2">
+            <select name="sort_by_created_date" id="sort_by_created_date" class="form-select">
+                <option value="desc" {{ request('sort_by_created_date') == 'desc' ? 'selected' : '' }}>Descending
+                </option>
+                <option value="asc" {{ request('sort_by_created_date') == 'asc' ? 'selected' : '' }}>Ascending
+                </option>
+            </select>
+        </div>
 
         <!-- View Toggle Buttons -->
         <div class="d-flex justify-content-end mb-3">
@@ -160,17 +174,28 @@
     <script src="{{ asset('asset/js/flatpickr.js') }}"></script>
 
     <script>
-        // Flatpickr Date Initialization
         flatpickr('input[name="start_date"]', {
             enableTime: false,
             dateFormat: 'Y-m-d',
-            defaultDate: "{{ request('start_date') }}"
+            defaultDate: "{{ request('start_date') }}",
+        });
+
+        document.getElementById('clear-start-date').addEventListener('click', function() {
+            const startDateInput = document.querySelector('input[name="start_date"]');
+            startDateInput.value = ''; // Clear the input value
+            startDateInput._flatpickr.clear(); // Clear Flatpickr's selected date
         });
 
         flatpickr('input[name="end_date"]', {
             enableTime: false,
             dateFormat: 'Y-m-d',
             defaultDate: "{{ request('end_date') }}"
+        });
+
+        document.getElementById('clear-end-date').addEventListener('click', function() {
+            const endDateInput = document.querySelector('input[name="end_date"]');
+            endDateInput.value = '';
+            endDateInput._flatpickr.clear();
         });
 
         document.querySelectorAll('.view-toggle').forEach(button => {
@@ -185,7 +210,7 @@
                 // Add 'active' class to the clicked button
                 this.classList.add('active');
 
-                // Toggle views based on the clicked button
+                // Toggle views based on the clicked button 
                 if (view === 'grid') {
                     document.getElementById('grid-view').classList.remove('d-none');
                     document.getElementById('table-view').classList.add('d-none');
@@ -209,6 +234,13 @@
                 // Trigger the search button
                 searchButton.click();
             });
+        });
+
+        document.getElementById('sort_by_created_date').addEventListener('change', function() {
+            const selectedValue = this.value;
+            const url = new URL(window.location.href);
+            url.searchParams.set('sort_by_created_date', selectedValue);
+            window.location.href = url.toString();
         });
     </script>
 

@@ -13,7 +13,7 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         // Schedule 'fetch:failed-popular-items' to run on Saturday at 12:00 PM
-        $schedule->command('fetch:failed-popular-items')->cron('0 12 * * 6'); // Saturday at 12:00 PM
+        // $schedule->command('fetch:failed-popular-items')->cron('0 12 * * 6'); // Saturday at 12:00 PM
 
         // Schedule 'fetch:popular-items' to run from Monday to Friday at 12:00 PM and then every minute until 11:59 PM
         $schedule->command('fetch:popular-items')->cron('*/1 12-23 * * 1-5'); // Monday to Friday, 12:00 PM - 11:59 PM

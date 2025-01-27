@@ -81,8 +81,14 @@
                     <!-- Sorting Dropdown -->
                     <div class="d-flex justify-content-between mb-3">
                         <h5>Sales</h5>
-                        <div><label for="select_date">Select Date: </label><input type="text" name="select_date"
-                                id="select_date"></div>
+                        <div>
+                            <div class="input-group">
+                                <label for="select_date" class="fw-bold">Select Date: </label> &nbsp;<input type="text" name="select_date"
+                                    id="select_date">
+                                <button type="button" id="clear-select_date"
+                                    class="btn btn-sm btn-outline-secondary">Clear</button>
+                            </div>
+                        </div>
                         <select class="form-select w-auto" id="sort_by" onchange="sortItems()">
                             <option value="">Sort By: Default</option>
                             <option value="sales" {{ request('sort_by') == 'sales' ? 'selected' : '' }}>Sort By: Sales
@@ -156,5 +162,12 @@
             window.location.href = url.toString();
         }
     });
+
+    document.getElementById('clear-select_date').addEventListener('click', function() {
+        const dateInput = document.querySelector('input[name="select_date"]');
+        dateInput.value = '';
+        dateInput._flatpickr.clear();
+    });
 </script>
+
 </html>

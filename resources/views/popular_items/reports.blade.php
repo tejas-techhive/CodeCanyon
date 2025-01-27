@@ -17,8 +17,7 @@
         <!-- Filters Form -->
         <form action="{{ route('popular.items.reports') }}" method="GET" class="mb-4">
             <div class="row g-3 align-items-end">
-                <!-- Category Filter -->
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label">Category</label>
                     <select name="category" class="form-select">
                         <option value="">Select Category</option>
@@ -39,27 +38,35 @@
                 <!-- Date Range Filter -->
                 <div class="col-md-2">
                     <label class="form-label">Start Date</label>
-                    <input type="text" name="start_date" class="form-control datepicker" placeholder="Start Date"
-                        value="{{ request('start_date') }}">
+                    <div class="input-group">
+                        <input type="text" name="start_date" class="form-control datepicker" placeholder="Start Date"
+                            value="{{ request('start_date') }}">
+                        <button type="button" id="clear-start-date"
+                            class="btn btn-sm btn-outline-secondary">Clear</button>
+                    </div>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">End Date</label>
-                    <input type="text" name="end_date" class="form-control datepicker" placeholder="End Date"
-                        value="{{ request('end_date') }}">
+                    <div class="input-group">
+                        <input type="text" name="end_date" class="form-control datepicker" placeholder="End Date"
+                            value="{{ request('end_date') }}">
+                        <button type="button" id="clear-end-date"
+                            class="btn btn-sm btn-outline-secondary">Clear</button>
+                    </div>
                 </div>
 
                 <!-- Total Sales Filter -->
                 <div class="col-md-2">
                     <label class="form-label">Sort Sales</label>
                     <select name="sort_order" class="form-select">
-                        <option value="asc" {{ request('sort_order') == 'asc' ? 'selected' : '' }}>Low to High
-                        </option>
                         <option value="desc" {{ request('sort_order') == 'desc' ? 'selected' : '' }}>High to Low
+                        </option>
+                        <option value="asc" {{ request('sort_order') == 'asc' ? 'selected' : '' }}>Low to High
                         </option>
                     </select>
                 </div>
                 <!-- Submit Button -->
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <button type="submit" class="btn btn-primary w-100">Search</button>
                 </div>
             </div>
@@ -98,46 +105,46 @@
                     @endforeach
                 </tbody>
             </table>
-        </div>
-
-        <!-- Pagination -->
-        <div class="d-flex justify-content-center mt-4">
-            @if ($paginatedResults->lastPage() > 1)
-                <nav>
-                    <ul class="pagination">
-                        <!-- Previous Page Link -->
-                        <li class="page-item {{ $paginatedResults->currentPage() == 1 ? 'disabled' : '' }}">
-                            <a class="page-link"
-                                href="{{ route('popular.items.reports', array_merge(request()->all(), ['page' => 1])) }}">First</a>
-                        </li>
-                        <li class="page-item {{ $paginatedResults->currentPage() == 1 ? 'disabled' : '' }}">
-                            <a class="page-link"
-                                href="{{ route('popular.items.reports', array_merge(request()->all(), ['page' => $paginatedResults->currentPage() - 1])) }}">Previous</a>
-                        </li>
-
-                        <!-- Pagination Links -->
-                        @for ($i = 1; $i <= $paginatedResults->lastPage(); $i++)
-                            <li class="page-item {{ $paginatedResults->currentPage() == $i ? 'active' : '' }}">
+            <!-- Pagination -->
+            <div class="mt-4 w-100">
+                @if ($paginatedResults->lastPage() > 1)
+                    <nav>
+                        <ul class="pagination">
+                            <!-- Previous Page Link -->
+                            <li class="page-item {{ $paginatedResults->currentPage() == 1 ? 'disabled' : '' }}">
                                 <a class="page-link"
-                                    href="{{ route('popular.items.reports', array_merge(request()->all(), ['page' => $i])) }}">{{ $i }}</a>
+                                    href="{{ route('popular.items.reports', array_merge(request()->all(), ['page' => 1])) }}">First</a>
                             </li>
-                        @endfor
-
-                        <!-- Next Page Link -->
-                        <li
-                            class="page-item {{ $paginatedResults->currentPage() == $paginatedResults->lastPage() ? 'disabled' : '' }}">
-                            <a class="page-link"
-                                href="{{ route('popular.items.reports', array_merge(request()->all(), ['page' => $paginatedResults->currentPage() + 1])) }}">Next</a>
-                        </li>
-                        <li
-                            class="page-item {{ $paginatedResults->currentPage() == $paginatedResults->lastPage() ? 'disabled' : '' }}">
-                            <a class="page-link"
-                                href="{{ route('popular.items.reports', array_merge(request()->all(), ['page' => $paginatedResults->lastPage()])) }}">Last</a>
-                        </li>
-                    </ul>
-                </nav>
-            @endif
+                            <li class="page-item {{ $paginatedResults->currentPage() == 1 ? 'disabled' : '' }}">
+                                <a class="page-link"
+                                    href="{{ route('popular.items.reports', array_merge(request()->all(), ['page' => $paginatedResults->currentPage() - 1])) }}">Previous</a>
+                            </li>
+    
+                            <!-- Pagination Links -->
+                            @for ($i = 1; $i <= $paginatedResults->lastPage(); $i++)
+                                <li class="page-item {{ $paginatedResults->currentPage() == $i ? 'active' : '' }}">
+                                    <a class="page-link"
+                                        href="{{ route('popular.items.reports', array_merge(request()->all(), ['page' => $i])) }}">{{ $i }}</a>
+                                </li>
+                            @endfor
+    
+                            <!-- Next Page Link -->
+                            <li
+                                class="page-item {{ $paginatedResults->currentPage() == $paginatedResults->lastPage() ? 'disabled' : '' }}">
+                                <a class="page-link"
+                                    href="{{ route('popular.items.reports', array_merge(request()->all(), ['page' => $paginatedResults->currentPage() + 1])) }}">Next</a>
+                            </li>
+                            <li
+                                class="page-item {{ $paginatedResults->currentPage() == $paginatedResults->lastPage() ? 'disabled' : '' }}">
+                                <a class="page-link"
+                                    href="{{ route('popular.items.reports', array_merge(request()->all(), ['page' => $paginatedResults->lastPage()])) }}">Last</a>
+                            </li>
+                        </ul>
+                    </nav>
+                @endif
+            </div>
         </div>
+
 
     </div>
 
@@ -150,11 +157,20 @@
             dateFormat: 'Y-m-d',
             defaultDate: "{{ request('start_date') }}"
         });
-
+        document.getElementById('clear-start-date').addEventListener('click', function() {
+            const endDateInput = document.querySelector('input[name="start_date"]');
+            endDateInput.value = '';
+            endDateInput._flatpickr.clear();
+        });
         flatpickr('input[name="end_date"]', {
             enableTime: false,
             dateFormat: 'Y-m-d',
             defaultDate: "{{ request('end_date') }}"
+        });
+        document.getElementById('clear-end-date').addEventListener('click', function() {
+            const endDateInput = document.querySelector('input[name="end_date"]');
+            endDateInput.value = '';
+            endDateInput._flatpickr.clear();
         });
     </script>
 </body>

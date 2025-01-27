@@ -104,8 +104,12 @@ class CategoryController extends Controller
             $query->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
         }
 
+        // Sorting logic
+        $sortOrder = $request->input('sort_by_created_date', 'desc'); // Default to 'desc'
+        $query->orderBy('created_at', $sortOrder);
+
         // Paginate results
-        $popularItems = $query->paginate(15);
+        $popularItems = $query->paginate(50);
 
         // Maintain filters on pagination links
         $popularItems->appends([
@@ -113,13 +117,14 @@ class CategoryController extends Controller
             'category' => $request->category,
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
+            'sort_by_created_date' => $sortOrder,
         ]);
 
         // Get categories to display in the filter dropdown
-        $categories = Category::all();
+        $categories = Category::select('id', 'slug')->get();
 
         // Pass the data to the view
-        return view('popular_items.index', compact('popularItems', 'searchTerm', 'categories', 'categoryId'));
+        return view('popular_items.index', compact('popularItems', 'searchTerm', 'categories', 'categoryId', 'sortOrder', 'startDate', 'endDate'));
     }
 
     public function showPortfolioItems(Request $request, $author_name = null)
@@ -140,7 +145,7 @@ class CategoryController extends Controller
         if ($request->filled('selected_date')) {
             $query->whereDate('created_at', $request->input('selected_date'));
         }
-        
+
         $sortBy = $request->input('sort_by'); // Get sort option
         if ($sortBy === 'sales') {
             $query->orderBy('sales', 'desc'); // Sort by Sales
@@ -156,7 +161,7 @@ class CategoryController extends Controller
 
         $popularItems->appends($request->except('page'));
 
-        return view('portfolio_items.index', compact('popularItems', 'request', 'latest','author_name'));
+        return view('portfolio_items.index', compact('popularItems', 'request', 'latest', 'author_name'));
     }
 
     public function showPopularReports(Request $request)
@@ -165,7 +170,7 @@ class CategoryController extends Controller
         $items = PopularItem::query();
 
         // Category filter
-        $categoryId = $request->category ?? 1;
+        $categoryId = $request->category;
         if (!empty($categoryId)) {
             $items->where('category_id', $categoryId);
         }
@@ -192,8 +197,8 @@ class CategoryController extends Controller
 
         // Process data to calculate total sales difference
         $result = $items->map(function ($itemGroup) {
-            $first = $itemGroup->first(); // First record
-            $last = $itemGroup->last();   // Last record
+            $first = $itemGroup->whereNotNull('total_sales')->first() ?? $itemGroup->first(); // First record
+            $last = $itemGroup->whereNotNull('total_sales')->last() ?? $itemGroup->last();   // Last record
 
             return [
                 'item_id' => $first->item_id,
@@ -213,7 +218,7 @@ class CategoryController extends Controller
         });
         // Sort by total_sales_difference (ascending or descending based on the user input)
 
-        $sortOrder = $request->sort_order ?? 'asc';
+        $sortOrder = $request->sort_order ?? 'desc';
 
         $result = $result->sortBy(function ($item) {
             return $item['total_sales_difference']; // Sort by 'total_sales_difference' field

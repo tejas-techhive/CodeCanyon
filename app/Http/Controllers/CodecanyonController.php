@@ -233,7 +233,7 @@ class CodecanyonController extends Controller
 
                     // Step 1: Fetch popular items page
                     $response = $this->client->request('GET', "https://codecanyon.net/popular_item/by_category?category=$category->slug");
-                    sleep(rand(15, 30)); 
+                    sleep(rand(15, 30));
                     if ($response->getStatusCode() !== 200) {
                         throw new \Exception('Failed to fetch the page content for category: ' . $category->slug);
                     }
@@ -352,14 +352,13 @@ class CodecanyonController extends Controller
                     DB::rollBack();
                     Log::error('An unexpected error occurred for category ' . $category->slug . ': ' . $e->getMessage());
                     DB::table('failed_categories')->updateOrInsert(
-                        ['category_id' => $category->id], 
+                        ['category_id' => $category->id],
                         [
                             'error_message' => $e->getMessage(),
                             'attempted_at' => now(),
                             'updated_at' => now()
                         ]
                     );
-                    
                 }
             }
         }
@@ -658,5 +657,36 @@ class CodecanyonController extends Controller
         }
 
         return response()->json(['message' => 'Authors added successfully!']);
+    }
+
+    public function themeForest()
+    {
+        $response = $this->client->request('GET', "https://themeforest.net/?auto_signin=true");
+
+        $html = $response->getBody()->getContents();
+        // home-featured_author_block_component__root
+        // home-items_showcase_block_component__root
+
+        $crawler = new Crawler($html);
+        $firstItem = $crawler->filter('.home-items_showcase_block_component__root')->first();
+        $items = $firstItem->filter('.home-items_showcase_block_component__gridItem .home-items_showcase_block_component__cardWrapper')->each(function (Crawler $node) {
+            $link = $node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('href') ?? null;
+            $title = $node->filter('h3.shared-item_cards-item_name_component__root a')->text('N/A');
+            $author = $node->filter('.shared-item_cards-author_category_component__root a')->first()->text('N/A');
+            $price = $node->filter('.shared-item_cards-price_component__root')->text('$0');
+            $sales = $node->filter('.shared-item_cards-sales_component__root')->text('0 Sales');
+            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('src') ?? null;
+    
+            return [
+                'title' => trim($title),
+                'link' => $link,
+                'author' => trim($author),
+                'price' => trim($price),
+                'sales' => trim($sales),
+                'image' => $image,
+            ];
+        });
+    
+        dd($items); // Outputs the scraped data for inspection
     }
 }

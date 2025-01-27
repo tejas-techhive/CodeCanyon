@@ -26,3 +26,9 @@ Route::get('codecanyon/failed/popular-items', [CodecanyonController::class, 'get
 Route::get('codecanyon/author/portfolio', [CodecanyonController::class, 'portFolio']);
 
 Route::get('codecanyon/author/add', [CodecanyonController::class, 'addAuthor']);
+
+//20-1-2025 ******** New *****************
+Route::get('codecanyon/theme-forest', [CodecanyonController::class, 'themeForest']);
+
+
+// ******** 20-1-2025 End *****************

@@ -25,6 +25,12 @@ Route::get('popular-items', [CategoryController::class, 'showPopularItems'])->na
 Route::get('portfolio-items/{author_name?}', [CategoryController::class, 'showPortfolioItems'])->name('portfolio.items');
 Route::get('popular-items/reports', [CategoryController::class, 'showPopularReports'])->name('popular.items.reports');
 
+//20-1-2025 ******** New *****************
+Route::get('theme-forest', [CategoryController::class, 'themeForest']);
+
+
+// ******** 20-1-2025 End *****************
+
 Route::get('/clear-cache', function () {
     Artisan::call('config:cache');
     Artisan::call('cache:clear');

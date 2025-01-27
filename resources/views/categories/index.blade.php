@@ -51,6 +51,9 @@
 
 <script>
     $(document).ready(function() {
+
+        let base_url = "{{ url('/')}}";
+
         $('.call-api-btn').on('click', function(event) {
             event.preventDefault();
 
@@ -59,7 +62,7 @@
 
             button.prop('disabled', true).text('Loading...');
             $.ajax({
-                url: 'http://127.0.0.1:8000/api/codecanyon/category-popular-items/' + categoryId,
+                url: base_url + '/api/codecanyon/category-popular-items/' + categoryId,
                 method: 'GET',
                 data: { category_id: categoryId },
                 dataType: 'json',

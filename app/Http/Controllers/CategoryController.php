@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Category;
 use App\Models\PopularItem;
 use App\Models\PortfolioItem;
+use App\Models\PortfolioItemThemeForest;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class CategoryController extends Controller
@@ -133,6 +134,43 @@ class CategoryController extends Controller
             $query = PortfolioItem::query()->where('author_name', $author_name);
         } else {
             $query = PortfolioItem::query();
+        }
+
+        if ($searchTerm = $request->input('search')) {
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('name', 'LIKE', "%{$searchTerm}%")
+                    ->orWhere('category', 'LIKE', "%{$searchTerm}%");
+            });
+        }
+
+        if ($request->filled('selected_date')) {
+            $query->whereDate('created_at', $request->input('selected_date'));
+        }
+
+        $sortBy = $request->input('sort_by'); // Get sort option
+        if ($sortBy === 'sales') {
+            $query->orderBy('sales', 'desc'); // Sort by Sales
+        } elseif ($sortBy === 'ratings') {
+            $query->orderBy('ratings', 'desc'); // Sort by Ratings
+        } else {
+            $query->latest(); // Default sorting
+        }
+
+
+        $latest = $query->latest()->first();
+        $popularItems = $query->paginate(30);
+
+        $popularItems->appends($request->except('page'));
+
+        return view('portfolio_items.index', compact('popularItems', 'request', 'latest', 'author_name'));
+    }
+
+    public function showPortfolioItemsThemeForest(Request $request, $author_name = null)
+    {
+        if (isset($author_name)) {
+            $query = PortfolioItemThemeForest::query()->where('author_name', $author_name);
+        } else {
+            $query = PortfolioItemThemeForest::query();
         }
 
         if ($searchTerm = $request->input('search')) {

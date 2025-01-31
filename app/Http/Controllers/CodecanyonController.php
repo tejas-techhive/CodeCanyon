@@ -5,8 +5,13 @@ namespace App\Http\Controllers;
 use App\Jobs\FetchPortfolioJob;
 use App\Jobs\TestQueueJob;
 use App\Models\Author;
+use App\Models\AuthorThemeForest;
 use App\Models\Category;
+use App\Models\Discounted;
 use App\Models\FailedCategory;
+use App\Models\Featured;
+use App\Models\FeaturedCodeCreator;
+use App\Models\NewItems;
 use App\Models\PopularItem;
 use GuzzleHttp\Client;
 use GuzzleHttp\Promise\Utils;
@@ -16,6 +21,10 @@ use Psr\Log\LoggerInterface;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Pool;
 use App\Models\PortfolioItem;
+use App\Models\RisingStar;
+use App\Models\ThemeForestFeatured;
+use App\Models\TopSeller;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
 
@@ -645,9 +654,51 @@ class CodecanyonController extends Controller
         }
     }
 
+    public function portFoliothemeforest()
+    {
+        $authorCount = AuthorThemeForest::where('is_complete', 0)->count();
+
+        $iterations = ceil($authorCount / 5);
+
+        for ($i = 0; $i < $iterations; $i++) {
+            Artisan::call('portfoliothemeforest:fetch');
+            $output = Artisan::output();
+            Log::info('Portfolio Fetch Output: ' . $output);
+            sleep(5);
+        }
+    }
+
+    // public function addAuthor()
+    // {
+    //     $authors = PopularItem::select('author_name')->distinct()->pluck('author_name')->toArray();
+
+    //     foreach ($authors as $author) {
+    //         Author::updateOrCreate(
+    //             ['name' => $author],
+    //             ['is_complete' => 0]
+    //         );
+    //     }
+
+    //     return response()->json(['message' => 'Authors added successfully!']);
+    // }
+
     public function addAuthor()
     {
         $authors = PopularItem::select('author_name')->distinct()->pluck('author_name')->toArray();
+
+        $otherAuthors = [
+            Featured::where('site', 'codecanyon')->select('author_name'),
+            NewItems::where('site', 'codecanyon')->select('author_name'),
+            Discounted::where('site', 'codecanyon')->select('author_name'),
+            RisingStar::where('site', 'codecanyon')->select('author_name'),
+            TopSeller::where('site', 'codecanyon')->select('author_name'),
+        ];
+
+        foreach ($otherAuthors as $query) {
+            $authors = array_merge($authors, $query->distinct()->pluck('author_name')->toArray());
+        }
+
+        $authors = array_unique($authors);
 
         foreach ($authors as $author) {
             Author::updateOrCreate(
@@ -659,34 +710,907 @@ class CodecanyonController extends Controller
         return response()->json(['message' => 'Authors added successfully!']);
     }
 
-    public function themeForest()
+
+    public function addAuthorForest()
+    {
+        $tables = [Featured::class, NewItems::class, Discounted::class, RisingStar::class, TopSeller::class];
+
+        $authors = collect($tables)
+            ->flatMap(fn($model) => $model::where('site', 'theme_forest')->pluck('author_name'))
+            ->unique()
+            ->filter()
+            ->toArray();
+
+        foreach ($authors as $author) {
+            AuthorThemeForest::updateOrCreate(['name' => $author], ['is_complete' => 0]);
+        }
+
+        return response()->json(['message' => 'Authors from ThemeForest added successfully!']);
+    }
+
+
+
+    public function FeaturedData()
     {
         $response = $this->client->request('GET', "https://themeforest.net/?auto_signin=true");
 
         $html = $response->getBody()->getContents();
-        // home-featured_author_block_component__root
-        // home-items_showcase_block_component__root
 
         $crawler = new Crawler($html);
-        $firstItem = $crawler->filter('.home-items_showcase_block_component__root')->first();
-        $items = $firstItem->filter('.home-items_showcase_block_component__gridItem .home-items_showcase_block_component__cardWrapper')->each(function (Crawler $node) {
+        $featuredcodeitemstheme = $crawler->filter('.home-items_showcase_block_component__root')->first();
+        $featuredcodeitemstheme = $featuredcodeitemstheme->filter('.home-items_showcase_block_component__gridItem .home-items_showcase_block_component__cardWrapper')->each(function (Crawler $node) {
             $link = $node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('href') ?? null;
             $title = $node->filter('h3.shared-item_cards-item_name_component__root a')->text('N/A');
-            $author = $node->filter('.shared-item_cards-author_category_component__root a')->first()->text('N/A');
             $price = $node->filter('.shared-item_cards-price_component__root')->text('$0');
             $sales = $node->filter('.shared-item_cards-sales_component__root')->text('0 Sales');
-            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('src') ?? null;
-    
+            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('data-fallback') ?? null;
+            $starsRating = $node->filter('.shared-stars_rating_component__starRating')->count()
+                ? $node->filter('.shared-stars_rating_component__starRating')->attr('aria-label')
+                : '';
+
+            preg_match('/Rated ([\d.]+) out of 5, ([\d\.K]+) reviews/', $starsRating, $matches);
+
+            $rating = $matches[1] ?? null;
+            $reviews = $matches[2] ?? null;
+            $byInfo = $node->filter('.shared-item_cards-author_category_component__root')->text('');
+
+            $author_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->text();
+            $author_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->attr('href');
+
+            $language_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->text();
+            $language_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->attr('href');
+
+            $originalPriceElement = $node->filter('.shared-item_cards-price_component__originalPrice');
+            $promoPriceElement = $node->filter('.shared-item_cards-price_component__promoPrice');
+            if ($originalPriceElement->count() && $promoPriceElement->count()) {
+                $price = str_replace('$', '', $originalPriceElement->text(''));
+                $offer = str_replace('$', '', $promoPriceElement->text(''));
+            } else {
+                // Fallback to the main price in case the offer does not exist
+                $price = str_replace('$', '', $node->filter('.shared-item_cards-price_component__root')->text(''));
+                $offer = null; // No promotional offer
+            }
+            $trending = $node->filter('.shared-item_cards-sash_component__sash_trending')->count() ? 'Yes' : 'No';
+            $itemId = json_decode($node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('data-analytics-click-payload') ?? '{}', true)['ecommerce']['items'][0]['itemId'] ?? null;
+            $href = $node->filter('.shared-item_cards-item_name_component__itemNameLink')->attr('href');
+
             return [
                 'title' => trim($title),
                 'link' => $link,
-                'author' => trim($author),
-                'price' => trim($price),
+                'featured_type' => 'featured-themes',
+                'site' => 'theme_forest',
+                'by' => trim(preg_replace('/\s+/', ' ', $byInfo)),
+                'author_link' => $author_link,
+                'author_name' => $author_name,
+                'language_name' => $language_name,
+                'language_link' => $language_link,
+                'price' => $price,
+                'offer' => $offer,
+                'stars' => $rating,
+                'reviews' => $reviews,
                 'sales' => trim($sales),
                 'image' => $image,
+                'trending' => $trending,
+                'item_id' => $itemId,
+                'single_url' => $href
+
+
             ];
         });
-    
-        dd($items); // Outputs the scraped data for inspection
+
+        $featuredcreateritemstheme = $crawler->filter('.home-featured_author_block_component__root')->first();
+        $featuredcreateritemstheme = $featuredcreateritemstheme->filter('.home-featured_author_block_component__gridItem .shared-item_cards-card_component__root')->each(function (Crawler $node) {
+            $link = $node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('href') ?? null;
+            $title = $node->filter('h3.shared-item_cards-item_name_component__root a')->text('N/A');
+            $price = $node->filter('.shared-item_cards-price_component__root')->text('$0');
+            $sales = $node->filter('.shared-item_cards-sales_component__root')->text('0 Sales');
+            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('data-fallback') ?? null;
+            $starsRating = $node->filter('.shared-stars_rating_component__starRating')->count()
+                ? $node->filter('.shared-stars_rating_component__starRating')->attr('aria-label')
+                : '';
+
+            preg_match('/Rated ([\d.]+) out of 5, ([\d\.K]+) reviews/', $starsRating, $matches);
+
+            $rating = $matches[1] ?? null;
+            $reviews = $matches[2] ?? null;
+            $byInfo = $node->filter('.shared-item_cards-author_category_component__root')->text('');
+
+            $author_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->text();
+            $author_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->attr('href');
+
+            $language_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->text();
+            $language_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->attr('href');
+
+            $originalPriceElement = $node->filter('.shared-item_cards-price_component__originalPrice');
+            $promoPriceElement = $node->filter('.shared-item_cards-price_component__promoPrice');
+            if ($originalPriceElement->count() && $promoPriceElement->count()) {
+                $price = str_replace('$', '', $originalPriceElement->text(''));
+                $offer = str_replace('$', '', $promoPriceElement->text(''));
+            } else {
+                // Fallback to the main price in case the offer does not exist
+                $price = str_replace('$', '', $node->filter('.shared-item_cards-price_component__root')->text(''));
+                $offer = null; // No promotional offer
+            }
+            $itemId = json_decode($node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('data-analytics-click-payload') ?? '{}', true)['ecommerce']['items'][0]['itemId'] ?? null;
+            $href = $node->filter('.shared-item_cards-item_name_component__itemNameLink')->attr('href');
+
+            return [
+                'title' => trim($title),
+                'title' => trim($title),
+                'featured_type' => 'featured-creater',
+                'site' => 'theme_forest',
+                'link' => $link,
+                'by' => trim(preg_replace('/\s+/', ' ', $byInfo)),
+                'author_link' => $author_link,
+                'author_name' => $author_name,
+                'language_name' => $language_name,
+                'language_link' => $language_link,
+                'price' => $price,
+                'offer' => $offer,
+                'stars' => $rating,
+                'reviews' => $reviews,
+                'sales' => trim($sales),
+                'image' => $image,
+                'item_id' => $itemId,
+                'single_url' => $href
+
+            ];
+        });
+
+
+
+        $response = $this->client->request('GET', "https://codecanyon.net/?auto_signin=true");
+        $html = $response->getBody()->getContents();
+
+        $crawler = new Crawler($html);
+        $featuredcode = $crawler->filter('.home-items_showcase_block_component__root')->first();
+        $featuredcodeitems = $featuredcode->filter('.home-items_showcase_block_component__gridItem .home-items_showcase_block_component__cardWrapper')->each(function (Crawler $node) {
+            $link = $node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('href') ?? null;
+            $title = $node->filter('h3.shared-item_cards-item_name_component__root a')->text('N/A');
+            $price = $node->filter('.shared-item_cards-price_component__root')->text('$0');
+            $sales = $node->filter('.shared-item_cards-sales_component__root')->text('0 Sales');
+            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('data-fallback') ?? null;
+            $starsRating = $node->filter('.shared-stars_rating_component__starRating')->count()
+                ? $node->filter('.shared-stars_rating_component__starRating')->attr('aria-label')
+                : '';
+
+            preg_match('/Rated ([\d.]+) out of 5, ([\d\.K]+) reviews/', $starsRating, $matches);
+
+            $rating = $matches[1] ?? null;
+            $reviews = $matches[2] ?? null;
+            $byInfo = $node->filter('.shared-item_cards-author_category_component__root')->text('');
+
+            $author_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->text();
+            $author_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->attr('href');
+
+            $language_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->text();
+            $language_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->attr('href');
+
+            $originalPriceElement = $node->filter('.shared-item_cards-price_component__originalPrice');
+            $promoPriceElement = $node->filter('.shared-item_cards-price_component__promoPrice');
+            if ($originalPriceElement->count() && $promoPriceElement->count()) {
+                $price = str_replace('$', '', $originalPriceElement->text(''));
+                $offer = str_replace('$', '', $promoPriceElement->text(''));
+            } else {
+                $price = str_replace('$', '', $node->filter('.shared-item_cards-price_component__root')->text(''));
+                $offer = null;
+            }
+            $itemId = json_decode($node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('data-analytics-click-payload') ?? '{}', true)['ecommerce']['items'][0]['itemId'] ?? null;
+            $href = $node->filter('.shared-item_cards-item_name_component__itemNameLink')->attr('href');
+
+            return [
+                'title' => trim($title),
+                'featured_type' => 'featured-code',
+                'site' => 'codecanyon',
+                'link' => $link,
+                'by' => trim(preg_replace('/\s+/', ' ', $byInfo)),
+                'author_link' => $author_link,
+                'author_name' => $author_name,
+                'language_name' => $language_name,
+                'language_link' => $language_link,
+                'price' => $price,
+                'offer' => $offer,
+                'stars' => $rating,
+                'reviews' => $reviews,
+                'sales' => trim($sales),
+                'image' => $image,
+                'item_id' => $itemId,
+                'single_url' => $href
+
+            ];
+        });
+
+        $featuredCreators = $crawler->filter('.home-featured_author_block_component__root')->first();
+        $featuredcreateritems = $featuredCreators->filter('.home-featured_author_block_component__gridItem .shared-item_cards-card_component__root')->each(function (Crawler $node) {
+            $link = $node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('href') ?? null;
+            $title = $node->filter('h3.shared-item_cards-item_name_component__root a')->text('N/A');
+            $price = $node->filter('.shared-item_cards-price_component__root')->text('$0');
+            $sales = $node->filter('.shared-item_cards-sales_component__root')->text('0 Sales');
+            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('data-fallback') ?? null;
+            $starsRating = $node->filter('.shared-stars_rating_component__starRating')->count()
+                ? $node->filter('.shared-stars_rating_component__starRating')->attr('aria-label')
+                : '';
+
+            preg_match('/Rated ([\d.]+) out of 5, ([\d\.K]+) reviews/', $starsRating, $matches);
+
+            $rating = $matches[1] ?? null;
+            $reviews = $matches[2] ?? null;
+            $byInfo = $node->filter('.shared-item_cards-author_category_component__root')->text('');
+
+            $author_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->text();
+            $author_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->attr('href');
+
+            $language_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->text();
+            $language_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->attr('href');
+
+
+
+            $originalPriceElement = $node->filter('.shared-item_cards-price_component__originalPrice');
+            $promoPriceElement = $node->filter('.shared-item_cards-price_component__promoPrice');
+            if ($originalPriceElement->count() && $promoPriceElement->count()) {
+                $price = str_replace('$', '', $originalPriceElement->text(''));
+                $offer = str_replace('$', '', $promoPriceElement->text(''));
+            } else {
+                // Fallback to the main price in case the offer does not exist
+                $price = str_replace('$', '', $node->filter('.shared-item_cards-price_component__root')->text(''));
+                $offer = null; // No promotional offer
+            }
+            $itemId = json_decode($node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('data-analytics-click-payload') ?? '{}', true)['ecommerce']['items'][0]['itemId'] ?? null;
+            $href = $node->filter('.shared-item_cards-item_name_component__itemNameLink')->attr('href');
+
+            return [
+                'title' => trim($title),
+                'title' => trim($title),
+                'featured_type' => 'featured-creater',
+                'site' => 'codecanyon',
+                'link' => $link,
+                'by' => trim(preg_replace('/\s+/', ' ', $byInfo)),
+                'author_link' => $author_link,
+                'author_name' => $author_name,
+                'language_name' => $language_name,
+                'language_link' => $language_link,
+                'price' => $price,
+                'offer' => $offer,
+                'stars' => $rating,
+                'reviews' => $reviews,
+                'sales' => trim($sales),
+                'image' => $image,
+                'item_id' => $itemId,
+                'single_url' => $href
+
+
+            ];
+        });
+
+        // dd($featuredcreateritems);
+        $allItems = array_merge($featuredcodeitemstheme, $featuredcreateritemstheme, $featuredcodeitems,  $featuredcreateritems);
+        foreach ($allItems as $item) {
+            Featured::create($item);
+        }
+
+        return response()->json(['message' => 'Data successfully scraped and stored']);
+    }
+
+    public function DiscountedOnly()
+    {
+
+        $response = $this->client->request('GET', "https://themeforest.net/search?discounted_only=1");
+        $html = $response->getBody()->getContents();
+
+        $crawler = new Crawler($html);
+        $themeforestDiscountedOnly = $crawler->filter('.search-index_content__searchResultsWrapper')->first();
+        $themeforestDiscountedOnly = $themeforestDiscountedOnly->filter('.shared-item_cards-card_component__root .shared-item_cards-list-image_card_component__root')->each(function (Crawler $node) {
+            $link = $node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('href') ?? null;
+            $title = $node->filter('h3.shared-item_cards-item_name_component__root a')->text('N/A');
+            // Extract the description as a concatenated string
+            $description = $node->filter('.shared-item_cards-key_features_component__root li')->each(function (Crawler $descNode) {
+                return trim($descNode->text());
+            });
+            $description = implode(', ', $description);
+
+            $price = $node->filter('.shared-item_cards-price_component__root')->text('$0');
+            $sales = $node->filter('.shared-item_cards-sales_component__root')->text('0 Sales');
+            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('data-fallback') ?? null;
+            $starsRating = $node->filter('.shared-stars_rating_component__starRating')->count()
+                ? $node->filter('.shared-stars_rating_component__starRating')->attr('aria-label')
+                : '';
+
+            preg_match('/Rated ([\d.]+) out of 5, ([\d\.K]+) reviews/', $starsRating, $matches);
+
+            $rating = $matches[1] ?? null;  // Extracts the star rating
+            $reviews = $matches[2] ?? null; // Extracts the number of reviews
+
+
+            $byInfo = $node->filter('.shared-item_cards-author_category_component__root')->text('');
+
+            $last_update = $node->filter('.meta-attributes__table .js-condense-item-page-info-panel--last_update time')->count()
+                ? $node->filter('.meta-attributes__table .js-condense-item-page-info-panel--last_update time')->attr('datetime')
+                : now();
+
+            $last_update_formatted = Carbon::parse($last_update)->format('Y-m-d h:i:s A');
+
+            $author_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->text();
+            $author_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->attr('href');
+
+            $language_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->text();
+            $language_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->attr('href');
+
+            $originalPriceElement = $node->filter('.shared-item_cards-price_component__originalPrice');
+            $promoPriceElement = $node->filter('.shared-item_cards-price_component__promoPrice');
+            if ($originalPriceElement->count() && $promoPriceElement->count()) {
+                $price = str_replace('$', '', $originalPriceElement->text(''));
+                $offer = str_replace('$', '', $promoPriceElement->text(''));
+            } else {
+                $price = str_replace('$', '', $node->filter('.shared-item_cards-price_component__root')->text(''));
+                $offer = null;
+            }
+            $trending = $node->filter('.shared-item_cards-sash_component__sash_trending')->count() ? 'Yes' : 'No';
+            $itemId = json_decode($node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('data-analytics-click-payload') ?? '{}', true)['ecommerce']['items'][0]['itemId'] ?? null;
+            $href = $node->filter('.shared-item_cards-item_name_component__itemNameLink')->attr('href');
+
+            return [
+                'title' => trim($title),
+                'site' => 'theme_forest',
+                'link' => $link,
+                'by' => trim(preg_replace('/\s+/', ' ', $byInfo)),
+                'author_link' => $author_link,
+                'author_name' => $author_name,
+                'language_name' => $language_name,
+                'language_link' => $language_link,
+                'price' => $price,
+                'offer' => $offer,
+                'stars' => $rating,
+                'reviews' => $reviews,
+                'review' => $reviews,
+                'sales' => trim($sales),
+                'image' => $image,
+                'description' => $description,
+                'last_update' => $last_update_formatted,
+                'trending' => $trending,
+                'item_id' => $itemId,
+                'single_url' => $href
+
+
+            ];
+        });
+
+        // dd($themeforestDiscountedOnly);
+        $response = $this->client->request('GET', "https://codecanyon.net/search?discounted_only=1");
+        $html = $response->getBody()->getContents();
+
+        $crawler = new Crawler($html);
+        $codecanyonDiscountedOnly = $crawler->filter('.search-index_content__searchResultsWrapper')->first();
+        $codecanyonDiscountedOnly = $codecanyonDiscountedOnly->filter('.shared-item_cards-card_component__root .shared-item_cards-list-image_card_component__root')->each(function (Crawler $node) {
+            $link = $node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('href') ?? null;
+            $title = $node->filter('h3.shared-item_cards-item_name_component__root a')->text('N/A');
+            // Extract the description as a concatenated string
+            $description = $node->filter('.shared-item_cards-key_features_component__root li')->each(function (Crawler $descNode) {
+                return trim($descNode->text());
+            });
+            $description = implode(', ', $description);
+
+            $price = $node->filter('.shared-item_cards-price_component__root')->text('$0');
+            $sales = $node->filter('.shared-item_cards-sales_component__root')->text('0 Sales');
+            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('data-fallback') ?? null;
+            $starsRating = $node->filter('.shared-stars_rating_component__starRating')->count()
+                ? $node->filter('.shared-stars_rating_component__starRating')->attr('aria-label')
+                : '';
+
+            preg_match('/Rated ([\d.]+) out of 5, ([\d\.K]+) reviews/', $starsRating, $matches);
+
+            $rating = $matches[1] ?? null;
+            $reviews = $matches[2] ?? null;
+            $byInfo = $node->filter('.shared-item_cards-author_category_component__root')->text('');
+
+            $author_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->text();
+            $author_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->attr('href');
+
+            $language_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->text();
+            $language_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->attr('href');
+
+            $originalPriceElement = $node->filter('.shared-item_cards-price_component__originalPrice');
+            $promoPriceElement = $node->filter('.shared-item_cards-price_component__promoPrice');
+            if ($originalPriceElement->count() && $promoPriceElement->count()) {
+                $price = str_replace('$', '', $originalPriceElement->text(''));
+                $offer = str_replace('$', '', $promoPriceElement->text(''));
+            } else {
+                $price = str_replace('$', '', $node->filter('.shared-item_cards-price_component__root')->text(''));
+                $offer = null;
+            }
+            $itemId = json_decode($node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('data-analytics-click-payload') ?? '{}', true)['ecommerce']['items'][0]['itemId'] ?? null;
+            $href = $node->filter('.shared-item_cards-item_name_component__itemNameLink')->attr('href');
+
+            return [
+                'title' => trim($title),
+                'site' => 'codecanyon',
+                'link' => $link,
+                'by' => trim(preg_replace('/\s+/', ' ', $byInfo)),
+                'author_link' => $author_link,
+                'author_name' => $author_name,
+                'language_name' => $language_name,
+                'language_link' => $language_link,
+                'price' => $price,
+                'offer' => $offer,
+                'stars' => $rating,
+                'reviews' => $reviews,
+                'sales' => trim($sales),
+                'image' => $image,
+                'description' => $description,
+                'item_id' => $itemId,
+                'single_url' => $href
+
+            ];
+        });
+
+        $allItems = array_merge($codecanyonDiscountedOnly, $themeforestDiscountedOnly);
+        foreach ($allItems as $item) {
+            Discounted::create($item);
+        }
+
+        return response()->json(['message' => 'Data successfully scraped and stored']);
+    }
+
+
+    public function TopSeller()
+    {
+        $response = $this->client->request('GET', "https://themeforest.net/top-sellers");
+
+        $html = $response->getBody()->getContents();
+
+        $crawler = new Crawler($html);
+        $themeforestTopSeller = $crawler->filter('.top_sellers-index_content__topSellers')->first();
+        $themeforestTopSeller = $themeforestTopSeller->filter('.shared-item_cards-card_component__root .shared-item_cards-grid-image_card_component__root')->each(function (Crawler $node) {
+            $link = $node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('href') ?? null;
+            $title = $node->filter('h3.shared-item_cards-item_name_component__root a')->text('N/A');
+            $price = $node->filter('.shared-item_cards-price_component__root')->text('$0');
+            $sales = $node->filter('.shared-item_cards-sales_component__root')->text('0 Sales');
+            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('data-fallback') ?? null;
+            $starsRating = $node->filter('.shared-stars_rating_component__starRating')->count()
+                ? $node->filter('.shared-stars_rating_component__starRating')->attr('aria-label')
+                : '';
+
+            preg_match('/Rated ([\d.]+) out of 5, ([\d\.K]+) reviews/', $starsRating, $matches);
+
+            $rating = $matches[1] ?? null;
+            $reviews = $matches[2] ?? null;
+
+
+            $byInfo = $node->filter('.shared-item_cards-author_category_component__root')->text('');
+            $author_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->text();
+            $author_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->attr('href');
+
+            $language_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->text();
+            $language_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->attr('href');
+
+            $originalPriceElement = $node->filter('.shared-item_cards-price_component__originalPrice');
+            $promoPriceElement = $node->filter('.shared-item_cards-price_component__promoPrice');
+            if ($originalPriceElement->count() && $promoPriceElement->count()) {
+                $price = str_replace('$', '', $originalPriceElement->text(''));
+                $offer = str_replace('$', '', $promoPriceElement->text(''));
+            } else {
+                // Fallback to the main price in case the offer does not exist
+                $price = str_replace('$', '', $node->filter('.shared-item_cards-price_component__root')->text(''));
+                $offer = null; // No promotional offer
+            }
+            $trending = $node->filter('.shared-item_cards-sash_component__sash_trending')->count() ? 'Yes' : 'No';
+            $itemId = json_decode($node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('data-analytics-click-payload') ?? '{}', true)['ecommerce']['items'][0]['itemId'] ?? null;
+            $href = $node->filter('.shared-item_cards-item_name_component__itemNameLink')->attr('href');
+
+            return [
+                'title' => trim($title),
+                'link' => $link,
+                'site' => 'theme_forest',
+                'by' => trim(preg_replace('/\s+/', ' ', $byInfo)),
+                'author_link' => $author_link,
+                'author_name' => $author_name,
+                'language_name' => $language_name,
+                'language_link' => $language_link,
+                'price' => $price,
+                'offer' => $offer,
+                'stars' => $rating,
+                'stars' => $rating,
+                'reviews' => $reviews,
+                'sales' => trim($sales),
+                'image' => $image,
+                'trending' => $trending,
+                'item_id' => $itemId,
+                'single_url' => $href
+
+
+            ];
+        });
+
+
+        $response = $this->client->request('GET', "https://codecanyon.net/top-sellers");
+
+        $html = $response->getBody()->getContents();
+
+        $crawler = new Crawler($html);
+        $codecanyonTopSeller = $crawler->filter('.top_sellers-index_content__topSellers')->first();
+        $codecanyonTopSeller = $codecanyonTopSeller->filter('.shared-item_cards-card_component__root .shared-item_cards-grid-image_card_component__root')->each(function (Crawler $node) {
+            $link = $node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('href') ?? null;
+            $title = $node->filter('h3.shared-item_cards-item_name_component__root a')->text('N/A');
+            $price = $node->filter('.shared-item_cards-price_component__root')->text('$0');
+            $sales = $node->filter('.shared-item_cards-sales_component__root')->text('0 Sales');
+            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('data-fallback') ?? null;
+            $starsRating = $node->filter('.shared-stars_rating_component__starRating')->count()
+                ? $node->filter('.shared-stars_rating_component__starRating')->attr('aria-label')
+                : '';
+
+            preg_match('/Rated ([\d.]+) out of 5, ([\d\.K]+) reviews/', $starsRating, $matches);
+
+            $rating = $matches[1] ?? null;
+            $reviews = $matches[2] ?? null;
+
+
+            $byInfo = $node->filter('.shared-item_cards-author_category_component__root')->text('');
+            $author_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->text();
+            $author_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->attr('href');
+
+            $language_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->text();
+            $language_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->attr('href');
+
+            $originalPriceElement = $node->filter('.shared-item_cards-price_component__originalPrice');
+            $promoPriceElement = $node->filter('.shared-item_cards-price_component__promoPrice');
+            if ($originalPriceElement->count() && $promoPriceElement->count()) {
+                $price = str_replace('$', '', $originalPriceElement->text(''));
+                $offer = str_replace('$', '', $promoPriceElement->text(''));
+            } else {
+                // Fallback to the main price in case the offer does not exist
+                $price = str_replace('$', '', $node->filter('.shared-item_cards-price_component__root')->text(''));
+                $offer = null; // No promotional offer
+            }
+            $itemId = json_decode($node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('data-analytics-click-payload') ?? '{}', true)['ecommerce']['items'][0]['itemId'] ?? null;
+            $href = $node->filter('.shared-item_cards-item_name_component__itemNameLink')->attr('href');
+
+            return [
+                'title' => trim($title),
+                'link' => $link,
+                'site' => 'codecanyon',
+                'by' => trim(preg_replace('/\s+/', ' ', $byInfo)),
+                'author_link' => $author_link,
+                'author_name' => $author_name,
+                'language_name' => $language_name,
+                'language_link' => $language_link,
+                'price' => $price,
+                'offer' => $offer,
+                'stars' => $rating,
+                'stars' => $rating,
+                'reviews' => $reviews,
+                'sales' => trim($sales),
+                'image' => $image,
+                'item_id' => $itemId,
+                'single_url' => $href
+
+            ];
+        });
+        $allItems = array_merge($codecanyonTopSeller, $themeforestTopSeller);
+        foreach ($allItems as $item) {
+            TopSeller::create($item);
+        }
+
+        return response()->json(['message' => 'Data successfully scraped and stored']);
+    }
+
+
+    public function RisingStar()
+    {
+
+        $response = $this->client->request('GET', "https://themeforest.net/search?date=this-month&sort=sales");
+        $html = $response->getBody()->getContents();
+
+        $crawler = new Crawler($html);
+        $themeforestRisingStar = $crawler->filter('.search-index_content__searchResultsWrapper')->first();
+        $themeforestRisingStar = $themeforestRisingStar->filter('.shared-item_cards-card_component__root .shared-item_cards-list-image_card_component__root')->each(function (Crawler $node) {
+            $link = $node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('href') ?? null;
+            $title = $node->filter('h3.shared-item_cards-item_name_component__root a')->text('N/A');
+            // Extract the description as a concatenated string
+            $description = $node->filter('.shared-item_cards-key_features_component__root li')->each(function (Crawler $descNode) {
+                return trim($descNode->text());
+            });
+            $description = implode(', ', $description);
+
+            $price = $node->filter('.shared-item_cards-price_component__root')->text('$0');
+            $sales = $node->filter('.shared-item_cards-sales_component__root')->text('0 Sales');
+            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('data-fallback') ?? null;
+            $starsRating = $node->filter('.shared-stars_rating_component__starRating')->count()
+                ? $node->filter('.shared-stars_rating_component__starRating')->attr('aria-label')
+                : '';
+
+            preg_match('/Rated ([\d.]+) out of 5, ([\d\.K]+) reviews/', $starsRating, $matches);
+
+            $rating = $matches[1] ?? null;  // Extracts the star rating
+            $reviews = $matches[2] ?? null; // Extracts the number of reviews
+
+
+            $byInfo = $node->filter('.shared-item_cards-author_category_component__root')->text('');
+
+            $last_update = $node->filter('.meta-attributes__table .js-condense-item-page-info-panel--last_update time')->count()
+                ? $node->filter('.meta-attributes__table .js-condense-item-page-info-panel--last_update time')->attr('datetime')
+                : now();
+
+            $last_update_formatted = Carbon::parse($last_update)->format('Y-m-d h:i:s A');
+
+            $author_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->text();
+            $author_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->attr('href');
+
+            $language_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->text();
+            $language_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->attr('href');
+
+            $originalPriceElement = $node->filter('.shared-item_cards-price_component__originalPrice');
+            $promoPriceElement = $node->filter('.shared-item_cards-price_component__promoPrice');
+            if ($originalPriceElement->count() && $promoPriceElement->count()) {
+                $price = str_replace('$', '', $originalPriceElement->text(''));
+                $offer = str_replace('$', '', $promoPriceElement->text(''));
+            } else {
+                $price = str_replace('$', '', $node->filter('.shared-item_cards-price_component__root')->text(''));
+                $offer = null;
+            }
+            $trending = $node->filter('.shared-item_cards-sash_component__sash_trending')->count() ? 'Yes' : 'No';
+            $itemId = json_decode($node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('data-analytics-click-payload') ?? '{}', true)['ecommerce']['items'][0]['itemId'] ?? null;
+            $href = $node->filter('.shared-item_cards-item_name_component__itemNameLink')->attr('href');
+
+            return [
+                'title' => trim($title),
+                'site' => 'theme_forest',
+                'link' => $link,
+                'by' => trim(preg_replace('/\s+/', ' ', $byInfo)),
+                'author_link' => $author_link,
+                'author_name' => $author_name,
+                'language_name' => $language_name,
+                'language_link' => $language_link,
+                'price' => $price,
+                'offer' => $offer,
+                'stars' => $rating,
+                'reviews' => $reviews,
+                'review' => $reviews,
+                'sales' => trim($sales),
+                'image' => $image,
+                'last_update' => $last_update_formatted,
+                'trending' => $trending,
+                'item_id' => $itemId,
+                'single_url' => $href
+
+
+            ];
+        });
+
+        // dd($themeforestRisingStar);
+        $response = $this->client->request('GET', "https://codecanyon.net/search?date=this-month&sort=sales");
+        $html = $response->getBody()->getContents();
+
+        $crawler = new Crawler($html);
+        $codecanyonRisingStar = $crawler->filter('.search-index_content__searchResultsWrapper')->first();
+        $codecanyonRisingStar = $codecanyonRisingStar->filter('.shared-item_cards-card_component__root .shared-item_cards-list-image_card_component__root')->each(function (Crawler $node) {
+            $link = $node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('href') ?? null;
+            $title = $node->filter('h3.shared-item_cards-item_name_component__root a')->text('N/A');
+            $price = $node->filter('.shared-item_cards-price_component__root')->text('$0');
+            $sales = $node->filter('.shared-item_cards-sales_component__root')->text('0 Sales');
+            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('data-fallback') ?? null;
+            $starsRating = $node->filter('.shared-stars_rating_component__starRating')->count()
+                ? $node->filter('.shared-stars_rating_component__starRating')->attr('aria-label')
+                : '';
+
+            preg_match('/Rated ([\d.]+) out of 5, ([\d\.K]+) reviews/', $starsRating, $matches);
+
+            $rating = $matches[1] ?? null;
+            $reviews = $matches[2] ?? null;
+            $byInfo = $node->filter('.shared-item_cards-author_category_component__root')->text('');
+
+            $author_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->text();
+            $author_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->attr('href');
+
+            $language_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->text();
+            $language_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->attr('href');
+
+            $last_update = $node->filter('.meta-attributes__table .js-condense-item-page-info-panel--last_update time')->count()
+                ? $node->filter('.meta-attributes__table .js-condense-item-page-info-panel--last_update time')->attr('datetime')
+                : now();
+
+            $last_update_formatted = Carbon::parse($last_update)->format('Y-m-d h:i:s A');
+
+            $originalPriceElement = $node->filter('.shared-item_cards-price_component__originalPrice');
+            $promoPriceElement = $node->filter('.shared-item_cards-price_component__promoPrice');
+            if ($originalPriceElement->count() && $promoPriceElement->count()) {
+                $price = str_replace('$', '', $originalPriceElement->text(''));
+                $offer = str_replace('$', '', $promoPriceElement->text(''));
+            } else {
+                $price = str_replace('$', '', $node->filter('.shared-item_cards-price_component__root')->text(''));
+                $offer = null;
+            }
+            $itemId = json_decode($node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('data-analytics-click-payload') ?? '{}', true)['ecommerce']['items'][0]['itemId'] ?? null;
+            $href = $node->filter('.shared-item_cards-item_name_component__itemNameLink')->attr('href');
+
+            return [
+                'title' => trim($title),
+                'site' => 'codecanyon',
+                'link' => $link,
+                'by' => trim(preg_replace('/\s+/', ' ', $byInfo)),
+                'author_link' => $author_link,
+                'author_name' => $author_name,
+                'language_name' => $language_name,
+                'language_link' => $language_link,
+                'price' => $price,
+                'offer' => $offer,
+                'stars' => $rating,
+                'reviews' => $reviews,
+                'sales' => trim($sales),
+                'image' => $image,
+                'last_update' => $last_update_formatted,
+                'item_id' => $itemId,
+                'single_url' => $href
+
+
+            ];
+        });
+
+        $allItems = array_merge($codecanyonRisingStar, $themeforestRisingStar);
+        // dd($allItems);
+        foreach ($allItems as $item) {
+            RisingStar::create($item);
+        }
+
+        return response()->json(['message' => 'Data successfully scraped and stored']);
+    }
+
+    public function NewItems()
+    {
+
+        $response = $this->client->request('GET', "https://themeforest.net/search?sort=date");
+        $html = $response->getBody()->getContents();
+
+        $crawler = new Crawler($html);
+        $themeforestNewItems = $crawler->filter('.search-index_content__searchResultsWrapper')->first();
+        $themeforestNewItems = $themeforestNewItems->filter('.shared-item_cards-card_component__root .shared-item_cards-list-image_card_component__root')->each(function (Crawler $node) {
+            $link = $node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('href') ?? null;
+            $title = $node->filter('h3.shared-item_cards-item_name_component__root a')->text('N/A');
+            // Extract the description as a concatenated string
+            $description = $node->filter('.shared-item_cards-key_features_component__root li')->each(function (Crawler $descNode) {
+                return trim($descNode->text());
+            });
+            $description = implode(', ', $description);
+
+            $price = $node->filter('.shared-item_cards-price_component__root')->text('$0');
+            $sales = $node->filter('.shared-item_cards-sales_component__root')->text('0 Sales');
+            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('data-fallback') ?? null;
+            $starsRating = $node->filter('.shared-stars_rating_component__starRating')->count()
+                ? $node->filter('.shared-stars_rating_component__starRating')->attr('aria-label')
+                : '';
+
+            preg_match('/Rated ([\d.]+) out of 5, ([\d\.K]+) reviews/', $starsRating, $matches);
+
+            $rating = $matches[1] ?? null;  // Extracts the star rating
+            $reviews = $matches[2] ?? null; // Extracts the number of reviews
+
+
+            $byInfo = $node->filter('.shared-item_cards-author_category_component__root')->text('');
+
+            $last_update = $node->filter('.meta-attributes__table .js-condense-item-page-info-panel--last_update time')->count()
+                ? $node->filter('.meta-attributes__table .js-condense-item-page-info-panel--last_update time')->attr('datetime')
+                : now();
+
+            $last_update_formatted = Carbon::parse($last_update)->format('Y-m-d h:i:s A');
+
+            $author_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->text();
+            $author_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->attr('href');
+
+            $language_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->text();
+            $language_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->attr('href');
+
+            $originalPriceElement = $node->filter('.shared-item_cards-price_component__originalPrice');
+            $promoPriceElement = $node->filter('.shared-item_cards-price_component__promoPrice');
+            if ($originalPriceElement->count() && $promoPriceElement->count()) {
+                $price = str_replace('$', '', $originalPriceElement->text(''));
+                $offer = str_replace('$', '', $promoPriceElement->text(''));
+            } else {
+                $price = str_replace('$', '', $node->filter('.shared-item_cards-price_component__root')->text(''));
+                $offer = null;
+            }
+            $trending = $node->filter('.shared-item_cards-sash_component__sash_trending')->count() ? 'Yes' : 'No';
+            $itemId = json_decode($node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('data-analytics-click-payload') ?? '{}', true)['ecommerce']['items'][0]['itemId'] ?? null;
+            $href = $node->filter('.shared-item_cards-item_name_component__itemNameLink')->attr('href');
+
+            return [
+                'title' => trim($title),
+                'site' => 'theme_forest',
+                'link' => $link,
+                'by' => trim(preg_replace('/\s+/', ' ', $byInfo)),
+                'author_link' => $author_link,
+                'author_name' => $author_name,
+                'language_name' => $language_name,
+                'language_link' => $language_link,
+                'price' => $price,
+                'offer' => $offer,
+                'stars' => $rating,
+                'reviews' => $reviews,
+                'review' => $reviews,
+                'sales' => trim($sales),
+                'image' => $image,
+                'description' => $description,
+                'last_update' => $last_update_formatted,
+                'trending' => $trending,
+                'item_id' => $itemId,
+                'single_url' => $href
+
+
+            ];
+        });
+
+        // dd($themeforestNewItems);
+        $response = $this->client->request('GET', "https://codecanyon.net/search?sort=date");
+        $html = $response->getBody()->getContents();
+
+        $crawler = new Crawler($html);
+        $codecanyonNewItems = $crawler->filter('.search-index_content__searchResultsWrapper')->first();
+        $codecanyonNewItems = $codecanyonNewItems->filter('.shared-item_cards-card_component__root .shared-item_cards-list-image_card_component__root')->each(function (Crawler $node) {
+            $link = $node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('href') ?? null;
+            $title = $node->filter('h3.shared-item_cards-item_name_component__root a')->text('N/A');
+            // Extract the description as a concatenated string
+            $description = $node->filter('.shared-item_cards-key_features_component__root li')->each(function (Crawler $descNode) {
+                return trim($descNode->text());
+            });
+            $description = implode(', ', $description);
+
+            $price = $node->filter('.shared-item_cards-price_component__root')->text('$0');
+            $sales = $node->filter('.shared-item_cards-sales_component__root')->text('0 Sales');
+            $image = $node->filter('.shared-item_cards-preview_image_component__image')->attr('data-fallback') ?? null;
+            $starsRating = $node->filter('.shared-stars_rating_component__starRating')->count()
+                ? $node->filter('.shared-stars_rating_component__starRating')->attr('aria-label')
+                : '';
+
+            preg_match('/Rated ([\d.]+) out of 5, ([\d\.K]+) reviews/', $starsRating, $matches);
+
+            $rating = $matches[1] ?? null;
+            $reviews = $matches[2] ?? null;
+            $byInfo = $node->filter('.shared-item_cards-author_category_component__root')->text('');
+
+            $author_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->text();
+            $author_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(0)->attr('href');
+
+            $language_name = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->text();
+            $language_link = $node->filter('.shared-item_cards-author_category_component__root a')->eq(1)->attr('href');
+
+            $originalPriceElement = $node->filter('.shared-item_cards-price_component__originalPrice');
+            $promoPriceElement = $node->filter('.shared-item_cards-price_component__promoPrice');
+            if ($originalPriceElement->count() && $promoPriceElement->count()) {
+                $price = str_replace('$', '', $originalPriceElement->text(''));
+                $offer = str_replace('$', '', $promoPriceElement->text(''));
+            } else {
+                $price = str_replace('$', '', $node->filter('.shared-item_cards-price_component__root')->text(''));
+                $offer = null;
+            }
+            $trending = $node->filter('.shared-item_cards-sash_component__sash_trending')->count() ? 'Yes' : 'No';
+            $itemId = json_decode($node->filter('a.shared-item_cards-preview_image_component__imageLink')->attr('data-analytics-click-payload') ?? '{}', true)['ecommerce']['items'][0]['itemId'] ?? null;
+            $href = $node->filter('.shared-item_cards-item_name_component__itemNameLink')->attr('href');
+            return [
+                'title' => trim($title),
+                'site' => 'codecanyon',
+                'link' => $link,
+                'by' => trim(preg_replace('/\s+/', ' ', $byInfo)),
+                'author_link' => $author_link,
+                'author_name' => $author_name,
+                'language_name' => $language_name,
+                'language_link' => $language_link,
+                'price' => $price,
+                'offer' => $offer,
+                'stars' => $rating,
+                'reviews' => $reviews,
+                'sales' => trim($sales),
+                'image' => $image,
+                'description' => $description,
+                'trending' => $trending,
+                'item_id' => $itemId,
+                'single_url' => $href
+
+            ];
+        });
+
+        $allItems = array_merge($codecanyonNewItems, $themeforestNewItems);
+        // dd($allItems);
+        foreach ($allItems as $item) {
+            NewItems::create($item);
+        }
+
+        return response()->json(['message' => 'Data successfully scraped and stored']);
     }
 }

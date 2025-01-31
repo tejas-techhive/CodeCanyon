@@ -24,11 +24,31 @@ Route::get('codecanyon/popular-items', [CodecanyonController::class, 'getPopular
 Route::get('codecanyon/failed/popular-items', [CodecanyonController::class, 'getFailedPopularItems']);
 
 Route::get('codecanyon/author/portfolio', [CodecanyonController::class, 'portFolio']);
+Route::get('codecanyon/author/portfolio-themeforest', [CodecanyonController::class, 'portFoliothemeforest']);
+
 
 Route::get('codecanyon/author/add', [CodecanyonController::class, 'addAuthor']);
-
-//20-1-2025 ******** New *****************
-Route::get('codecanyon/theme-forest', [CodecanyonController::class, 'themeForest']);
+Route::get('codecanyon/author/add-themeforest', [CodecanyonController::class, 'addAuthorForest']);
 
 
+//20-1-2025 ******** New updated store FeaturedData and 3 params in existing code by mukesh on 27-1-2025 *****************
+Route::get('codecanyon/featured-data', [CodecanyonController::class, 'FeaturedData']);
 // ******** 20-1-2025 End *****************
+
+
+// //28-1-2025 ******** New updated store code and 3 params by mukesh*****************
+Route::get('codecanyon/discounted-only', [CodecanyonController::class, 'DiscountedOnly']);
+// // ******** 20-1-2025 End *****************
+
+
+// //29-1-2025 ******** New updated store DiscountedOnly mukesh*****************
+Route::get('codecanyon/top-seller', [CodecanyonController::class, 'TopSeller']);
+// // ******** 20-1-2025 End *****************
+
+// //29-1-2025 ******** New updated store DiscountedOnly mukesh*****************
+Route::get('codecanyon/rising-star', [CodecanyonController::class, 'RisingStar']);
+// // ******** 20-1-2025 End *****************
+
+// //29-1-2025 ******** New updated store NewItems mukesh*****************
+Route::get('codecanyon/new-items', [CodecanyonController::class, 'NewItems']);
+// // ******** 20-1-2025 End *****************

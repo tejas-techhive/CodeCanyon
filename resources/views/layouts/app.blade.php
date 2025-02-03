@@ -67,7 +67,7 @@
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="navbarDropdownCategories">
                             <li>
-                                <a class="nav-link" href="{{ route('popular.items') }}">Code Canyon Popular Items</a>
+                                <a class="nav-link" href="{{ route('popular.items') }}">Codecanyon Popular Items</a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="{{ route('theme.popular') }}">ThemeForest

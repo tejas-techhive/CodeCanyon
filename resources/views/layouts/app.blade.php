@@ -25,12 +25,61 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ route('categories.index') }}">Categories</a>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownCategories" role="button"
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                            Categories
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="navbarDropdownCategories">
+                            <li>
+                                <a class="dropdown-item" href="{{ route('categories.index') }}">Code Canyon
+                                    Categories</a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ route('theme-categories.index') }}">ThemeForest
+                                    Categories</a>
+                            </li>
+                        </ul>
                     </li>
-                    <li class="nav-item">
+
+
+                    <ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+                        <li><a class="dropdown-item {{ request()->routeIs('categories.index') ? 'active' : '' }}"
+                                href="{{ route('categories.index') }}">Categories</a></li>
+                        <li><a class="dropdown-item {{ request()->routeIs('reports.featured') ? 'active' : '' }}"
+                                href="{{ route('reports.featured') }}">Featured</a></li>
+                        <li><a class="dropdown-item {{ request()->routeIs('reports.discount-sale') ? 'active' : '' }}"
+                                href="{{ route('reports.discount-sale') }}">Discount Sale</a></li>
+                        <li><a class="dropdown-item {{ request()->routeIs('reports.best-sellers') ? 'active' : '' }}"
+                                href="{{ route('reports.best-sellers') }}">Best Seller</a></li>
+                        <li><a class="dropdown-item {{ request()->routeIs('reports.rising-star') ? 'active' : '' }}"
+                                href="{{ route('reports.rising-star') }}">Rising Star</a></li>
+                        <li><a class="dropdown-item {{ request()->routeIs('reports.newest-item') ? 'active' : '' }}"
+                                href="{{ route('reports.newest-item') }}">Newest Item</a></li>
+                    </ul>
+
+
+
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownCategories" role="button"
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                            Popular Items
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="navbarDropdownCategories">
+                            <li>
+                                <a class="nav-link" href="{{ route('popular.items') }}">Code Canyon Popular Items</a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ route('theme.popular') }}">ThemeForest
+                                    Popular Items</a>
+                            </li>
+                        </ul>
+                    </li>
+
+
+                    {{-- <li class="nav-item">
                         <a class="nav-link" href="{{ route('popular.items') }}">Popular Items</a>
-                    </li>
+                    </li> --}}
                     <li
                         class="nav-item dropdown {{ request()->is('reports/*') || request()->routeIs('popular.items.reports') ? 'active' : '' }}">
                         <a class="nav-link dropdown-toggle {{ request()->is('reports/*') ? 'active' : '' }}"

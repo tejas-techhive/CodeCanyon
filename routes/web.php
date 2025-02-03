@@ -9,6 +9,10 @@ use App\Http\Controllers\Reports\DiscountSaleController;
 use App\Http\Controllers\Reports\FeaturedController;
 use App\Http\Controllers\Reports\NewestItemController;
 use App\Http\Controllers\Reports\RisingStarController;
+use App\Http\Controllers\ThemeForest\ThemeForestCategoryController;
+use App\Http\Controllers\ThemeForest\ThemeForestPopularitemController;
+use App\Models\ThemeForestCategory;
+
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -34,6 +38,8 @@ Route::get('popular-items/reports', [CategoryController::class, 'showPopularRepo
 
 //20-1-2025 ******** New *****************
 Route::get('theme-forest', [CategoryController::class, 'themeForest']);
+Route::get('theme-forest-popular-items', [ThemeForestPopularitemController::class, 'themeForestPopular'])->name('theme.popular');
+
 
 
 // ******** 20-1-2025 End *****************
@@ -46,6 +52,7 @@ Route::prefix('reports')->group(function () {
     Route::get('/rising-star', [RisingStarController::class, 'index'])->name('reports.rising-star');
 });
 
+Route::resource('theme-categories', ThemeForestCategoryController::class);
 
 Route::get('/clear-cache', function () {
     Artisan::call('config:cache');

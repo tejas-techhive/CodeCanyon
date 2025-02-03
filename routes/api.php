@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CodecanyonController;
+use App\Http\Controllers\ThemeForest\ThemeForestPopularItemsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -51,4 +52,8 @@ Route::get('codecanyon/rising-star', [CodecanyonController::class, 'RisingStar']
 
 // //29-1-2025 ******** New updated store NewItems mukesh*****************
 Route::get('codecanyon/new-items', [CodecanyonController::class, 'NewItems']);
+// // ******** 20-1-2025 End *****************
+
+// //29-1-2025 ******** New updated store NewItems mukesh*****************
+Route::get('theme/category-popular-items/{id}', [ThemeForestPopularItemsController::class, 'getCategoriesAndPopularItems']);
 // // ******** 20-1-2025 End *****************

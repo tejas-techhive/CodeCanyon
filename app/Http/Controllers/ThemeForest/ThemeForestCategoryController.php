@@ -1,41 +1,44 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\ThemeForest;
 
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Category;
 use App\Models\PopularItem;
+use App\Models\PopularItemTheme;
 use App\Models\PortfolioItem;
 use App\Models\PortfolioItemThemeForest;
+use App\Models\ThemeForestCategory;
 use Illuminate\Pagination\LengthAwarePaginator;
 
-class CategoryController extends Controller
+class ThemeForestCategoryController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
     public function index()
     {
-        $categories = Category::whereNull('parent_id')->get();
+        $categories = ThemeForestCategory::whereNull('parent_id')->get();
         $categories->each(function ($category) {
+            // dd($category->hasPopularItemToday() );
             $category->flat = $category->hasPopularItemToday() ? 'yes' : 'no';
         });
         // Return the index view and pass the categories to it
-        return view('categories.index', compact('categories'));
+        return view('themes.categories.index', compact('categories'));
     }
 
     public function create()
     {
-        $categories = Category::all(); // Get all categories to list them as parent options
-        return view('categories.create', compact('categories'));
+        $categories = ThemeForestCategory::all(); // Get all categories to list them as parent options
+        return view('themes.categories.create', compact('categories'));
     }
 
     public function store(Request $request)
     {
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'required|string|max:255|unique:categories,slug',
-            'site_type' => 'nullable|in:0,1',
+            'slug' => 'required|string|max:255|unique:theme_forest_categories,slug',
             'parent_id' => 'nullable|exists:categories,id'
         ]);
 
@@ -44,9 +47,9 @@ class CategoryController extends Controller
             $validatedData['site_type'] = 0;
         }
 
-        Category::create($validatedData);
+        ThemeForestCategory::create($validatedData);
 
-        return redirect()->route('categories.index')->with('success', 'Category created successfully!');
+        return redirect()->route('theme-categories.index')->with('success', ' ThemeForest Category created successfully!');
     }
 
     /**
@@ -59,8 +62,8 @@ class CategoryController extends Controller
 
     public function edit(Category $category)
     {
-        $categories = Category::where('id', '!=', $category->id)->get(); // Prevent parent from being self
-        return view('categories.edit', compact('category', 'categories'));
+        $categories = ThemeForestCategory::where('id', '!=', $category->id)->get(); // Prevent parent from being self
+        return view('themes.categories.edit', compact('category', 'categories'));
     }
 
     public function update(Request $request, Category $category)
@@ -73,7 +76,7 @@ class CategoryController extends Controller
 
         $category->update($request->all());
 
-        return redirect()->route('categories.index')->with('success', 'Category updated successfully!');
+        return redirect()->route('theme-categories.index')->with('success', ' ThemeForest Category updated successfully!');
     }
 
     /**
@@ -86,7 +89,7 @@ class CategoryController extends Controller
 
     public function showPopularItems(Request $request)
     {
-        $query = PopularItem::query()->with('category');
+        $query = PopularItemTheme::query()->with('category');
 
         // Search filter
         $searchTerm = $request->search;
@@ -128,7 +131,7 @@ class CategoryController extends Controller
         ]);
 
         // Get categories to display in the filter dropdown
-        $categories = Category::select('id', 'slug')->get();
+        $categories = ThemeForestCategory::select('id', 'slug')->get();
 
         // Pass the data to the view
         return view('popular_items.index', compact('popularItems', 'searchTerm', 'categories', 'categoryId', 'sortOrder', 'startDate', 'endDate'));
@@ -206,78 +209,5 @@ class CategoryController extends Controller
         $popularItems->appends($request->except('page'));
 
         return view('portfolio_items.index', compact('popularItems', 'request', 'latest', 'author_name'));
-    }
-
-    public function showPopularReports(Request $request)
-    {
-        // Initialize query
-        $items = PopularItem::query();
-
-        // Category filter
-        $categoryId = $request->category;
-        if (!empty($categoryId)) {
-            $items->where('category_id', $categoryId);
-        }
-
-        // Search filter
-        $searchTerm = $request->search;
-        if (!empty($searchTerm)) {
-            $items->where(function ($q) use ($searchTerm) {
-                $q->where('language_name', 'LIKE', "%{$searchTerm}%")
-                    ->orWhere('name', 'LIKE', "%{$searchTerm}%")
-                    ->orWhere('item_id', 'LIKE', "%{$searchTerm}%");
-            });
-        }
-
-        // Date range filter
-        $startDate = $request->start_date;
-        $endDate = $request->end_date;
-        if (!empty($startDate) && !empty($endDate)) {
-            $items->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
-        }
-
-        // Get the data and group it by 'item_id'
-        $items = $items->orderBy('created_at', 'asc')->get()->groupBy('item_id');
-
-        // Process data to calculate total sales difference
-        $result = $items->map(function ($itemGroup) {
-            $first = $itemGroup->whereNotNull('total_sales')->first() ?? $itemGroup->first(); // First record
-            $last = $itemGroup->whereNotNull('total_sales')->last() ?? $itemGroup->last();   // Last record
-
-            return [
-                'item_id' => $first->item_id,
-                'name' => $first->name,
-                'total_sales_difference' => (
-                    (float) str_replace(',', '', $last->total_sales ?? 0) -
-                    (float) str_replace(',', '', $first->total_sales ?? 0)
-                ),
-                'first_total_sales' => $first->total_sales,
-                'last_total_sales' => $last->total_sales,
-                'price' => $last->price,
-                'image' => $last->image,
-                'author_name' => $last->author_name,
-                'published' => $last->published,
-                'trending' => $itemGroup->where('trending', 'Yes')->count(),
-            ];
-        });
-        // Sort by total_sales_difference (ascending or descending based on the user input)
-
-        $sortOrder = $request->sort_order ?? 'desc';
-
-        $result = $result->sortBy(function ($item) {
-            return $item['total_sales_difference']; // Sort by 'total_sales_difference' field
-        }, SORT_REGULAR, $sortOrder === 'desc')->values();
-
-        // Pagination logic for the result
-        $perPage = 20;
-        $currentPage = LengthAwarePaginator::resolveCurrentPage();
-        $currentResults = $result->slice(($currentPage - 1) * $perPage, $perPage);
-        $paginatedResults = new LengthAwarePaginator($currentResults, $result->count(), $perPage, $currentPage);
-
-        // Fetch categories
-        $categories = Category::all();
-
-        // Return view with required data
-        return view('popular_items.reports', compact('paginatedResults', 'searchTerm', 'categories', 'categoryId'));
     }
 }

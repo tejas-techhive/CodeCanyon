@@ -6,7 +6,7 @@
     <div class="container">
         <h1>Create New Category</h1>
 
-        <form action="{{ route('categories.store') }}" method="POST">
+        <form action="{{ route('theme-categories.store') }}" method="POST">
             @csrf
 
             <!-- Category Name -->
